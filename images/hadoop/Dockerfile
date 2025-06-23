@@ -3,8 +3,7 @@ ARG OZONE_TAG=latest
 FROM terrestrials/ozone:${OZONE_TAG} AS ozone-jars
 
 # Stage 2: Build Hadoop image using the common base
-ARG BASE_IMAGE_TAG=latest
-FROM terrestrials/base:${BASE_IMAGE_TAG}
+FROM terrestrials/base:latest
 
 # Copy and extract Hadoop tarball
 ARG HADOOP_TARBALL=hadoop-*.tar.gz
