@@ -14,18 +14,32 @@ on:
       - '.github/workflows/build-hadoop.yml'
   workflow_dispatch:
     inputs:
+      build_method:
+        description: 'ビルド方法を選択 (download: 高速なバイナリダウンロード, source: ソースからビルド)'
+        required: true
+        default: 'download'
+        type: choice
+        options:
+          - download
+          - source
       hadoop_ref:
-        description: 'Hadoop repository ref (branch/tag/commit)'
+        description: 'Hadoopのソースブランチ/タグ (`source`ビルド時のみ有効)'
         required: false
         default: 'rel/release-3.4.1'
         type: string
+      hadoop_version:
+        description: 'Hadoopのバージョン (`download`ビルドやタグ付けで利用)'
+        required: false
+        default: '3.4.1'
+        type: string
 
 env:
-  HADOOP_VERSION: '3.4.1'
+  HADOOP_VERSION: ${{ github.event.inputs.hadoop_version || '3.4.1' }}
 
 jobs:
   build:
-    runs-on: ubuntu-22.04-arm
+    # ビルド方法に応じてランナーを切り替える
+    runs-on: ${{ (github.event.inputs.build_method == 'source' && 'ubuntu-22.04-arm') || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
@@ -33,7 +47,19 @@ jobs:
       - name: Checkout Dockerfile repository
         uses: actions/checkout@v4
 
+      # --- Fast path: Download pre-built binary ---
+      - name: Download pre-built Hadoop binary
+        if: github.event.inputs.build_method == 'download' || github.event_name != 'workflow_dispatch'
+        run: |
+          echo "Downloading Hadoop version ${{ env.HADOOP_VERSION }}..."
+          curl -fsSL "https://dlcdn.apache.org/hadoop/common/hadoop-${{ env.HADOOP_VERSION }}/hadoop-${{ env.HADOOP_VERSION }}.tar.gz" -o images/hadoop/hadoop-${{ env.HADOOP_VERSION }}.tar.gz
+          # The tarball name needs to be predictable for the Docker build-arg
+          mv images/hadoop/hadoop-${{ env.HADOOP_VERSION }}.tar.gz images/hadoop/hadoop-release.tar.gz
+          echo "Download complete."
+
+      # --- Slow path: Build from source ---
       - name: Checkout Apache Hadoop repository
+        if: github.event.inputs.build_method == 'source'
         uses: actions/checkout@v4
         with:
           repository: apache/hadoop
@@ -41,12 +67,14 @@ jobs:
           path: hadoop-src
 
       - name: Set up JDK 11
+        if: github.event.inputs.build_method == 'source'
         uses: actions/setup-java@v4
         with:
           java-version: '11'
           distribution: 'temurin'
 
       - name: Cache Maven dependencies
+        if: github.event.inputs.build_method == 'source'
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
@@ -55,25 +83,25 @@ jobs:
             ${{ runner.os }}-maven-hadoop-${{ github.event.inputs.hadoop_ref || 'rel/release-3.4.1' }}-
 
       - name: Build Hadoop from source
+        if: github.event.inputs.build_method == 'source'
         working-directory: hadoop-src
         run: mvn clean package -Pdist -DskipTests -Dtar -Dmaven.javadoc.skip=true -B
 
       - name: Move tarball to Docker build context
-        run: find hadoop-src/hadoop-dist/target -name "hadoop-*.tar.gz" -exec mv {} images/hadoop/ \;
-
-      - name: Clean up to free disk space
+        if: github.event.inputs.build_method == 'source'
         run: |
-          echo "Before cleanup:"
-          df -h
-          
+          # The tarball name needs to be predictable for the Docker build-arg
+          find hadoop-src/hadoop-dist/target -name "hadoop-*.tar.gz" -exec mv {} images/hadoop/hadoop-release.tar.gz \;
+
+      - name: Clean up after source build
+        if: github.event.inputs.build_method == 'source'
+        run: |
+          echo "Cleaning up build environment..."
           rm -rf hadoop-src
           rm -rf ~/.m2/repository
-          
           docker system prune -af
-          
-          echo "After cleanup:"
-          df -h
 
+      # --- Common Docker build steps ---
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -107,7 +135,7 @@ jobs:
           tags: ${{ steps.meta-hadoop.outputs.tags }}
           labels: ${{ steps.meta-hadoop.outputs.labels }}
           build-args: |
-            HADOOP_TARBALL=hadoop-*.tar.gz
+            HADOOP_TARBALL=hadoop-release.tar.gz
             OZONE_TAG=latest
           platforms: linux/amd64,linux/arm64
 
