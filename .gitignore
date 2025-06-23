@@ -1,0 +1,40 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+*.tar.gz
+*.tar
+*.zip
+*.jar
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Python
+__pycache__/
+*.pyc
+
+# Node.js
+node_modules/
+
+# Maven (if used locally)
+target/
+
+# Docker
+.dockerignore.local
+
+# GitHub Action
+.secrets
