@@ -62,12 +62,7 @@ jobs:
       - name: Build Ozone from source
         working-directory: ozone-src
         run: |
-          mvn clean package -DskipTests -Pdist -DskipShade -B \
-            -Dmaven.javadoc.skip=true \
-            -Dcheckstyle.skip=true \
-            -Dfindbugs.skip=true \
-            -Dspotbugs.skip=true \
-            -Denforcer.skip=true
+          mvn clean package -DskipTests -Pdist -Dmaven.javadoc.skip=true -B
 
       - name: Move tarball to Docker build context
         run: find ozone-src/hadoop-ozone/dist/target -name "ozone-*.tar.gz" -exec mv {} images/ozone/ \;
