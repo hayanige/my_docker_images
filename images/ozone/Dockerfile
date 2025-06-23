@@ -1,24 +1,6 @@
-# Runtime-only Dockerfile (assumes pre-built Ozone tarball)
-FROM rockylinux/rockylinux:9.5
-
-# Install dependencies
-RUN dnf install -y epel-release && \
-    dnf install -y dumb-init && \
-    dnf install -y \
-      krb5-workstation \
-      java-11-openjdk \
-      java-11-openjdk-devel \
-      iputils \
-      net-tools \
-      bind-utils \
-      nc \
-      sudo \
-      procps-ng \
-      ncurses \
-      tree \
-      jq \
-      python3-pip && \
-    dnf clean all
+# Build Ozone image using the common base
+ARG BASE_IMAGE_TAG=latest
+FROM terrestrials/base:${BASE_IMAGE_TAG}
 
 RUN pip3 install awscli
 
