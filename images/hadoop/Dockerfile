@@ -54,5 +54,5 @@ ENV HADOOP_LOG_DIR=/var/log/hadoop
 ENV TZ=Asia/Tokyo
 
 # Copy only necessary Ozone JARs from the first stage
-COPY --from=ozone-jars /opt/ozone/share/ozone/lib/ozone-filesystem-*.jar /opt/hadoop/share/hadoop/common/lib/
-COPY --from=ozone-jars /opt/ozone/share/ozone/lib/ozone-filesystem-common-*.jar /opt/hadoop/share/hadoop/common/lib/
+COPY --from=ozone-jars /opt/ozone/share/ozone/lib/ozone-filesystem-hadoop3-*.jar /opt/hadoop/share/hadoop/common/lib/
+RUN find /opt/hadoop/share/hadoop/common/lib -name "ozone-filesystem-hadoop3-client-*.jar" -exec rm {} \;

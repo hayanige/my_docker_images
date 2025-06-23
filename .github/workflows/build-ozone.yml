@@ -62,7 +62,7 @@ jobs:
       - name: Build Ozone from source
         working-directory: ozone-src
         run: |
-          mvn clean install -DskipTests -Pdist -Dtar -DskipShade -T 1C -B \
+          mvn clean package -DskipTests -Pdist -DskipShade -B \
             -Dmaven.javadoc.skip=true \
             -Dcheckstyle.skip=true \
             -Dfindbugs.skip=true \
