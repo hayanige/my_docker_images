@@ -7,11 +7,13 @@ on:
     paths:
       - 'images/hadoop/**'
       - '.github/workflows/build-hadoop.yml'
+      - '.github/workflows/reusable-docker-build.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'images/hadoop/**'
       - '.github/workflows/build-hadoop.yml'
+      - '.github/workflows/reusable-docker-build.yml'
   workflow_dispatch:
     inputs:
       build_method:
@@ -37,12 +39,10 @@ env:
   HADOOP_VERSION: ${{ github.event.inputs.hadoop_version || '3.4.1' }}
 
 jobs:
-  build:
-    # ビルド方法に応じてランナーを切り替える
+  prepare:
     runs-on: ${{ (github.event.inputs.build_method == 'source' && 'ubuntu-22.04-arm') || 'ubuntu-latest' }}
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      hadoop_version: ${{ env.HADOOP_VERSION }}
     steps:
       - name: Checkout Dockerfile repository
         uses: actions/checkout@v4
@@ -53,7 +53,6 @@ jobs:
         run: |
           echo "Downloading Hadoop version ${{ env.HADOOP_VERSION }}..."
           curl -fsSL "https://dlcdn.apache.org/hadoop/common/hadoop-${{ env.HADOOP_VERSION }}/hadoop-${{ env.HADOOP_VERSION }}.tar.gz" -o images/hadoop/hadoop-${{ env.HADOOP_VERSION }}.tar.gz
-          # The tarball name needs to be predictable for the Docker build-arg
           mv images/hadoop/hadoop-${{ env.HADOOP_VERSION }}.tar.gz images/hadoop/hadoop-release.tar.gz
           echo "Download complete."
 
@@ -90,76 +89,26 @@ jobs:
       - name: Move tarball to Docker build context
         if: github.event.inputs.build_method == 'source'
         run: |
-          # The tarball name needs to be predictable for the Docker build-arg
           find hadoop-src/hadoop-dist/target -name "hadoop-*.tar.gz" -exec mv {} images/hadoop/hadoop-release.tar.gz \;
 
-      - name: Clean up after source build
-        if: github.event.inputs.build_method == 'source'
-        run: |
-          echo "Cleaning up build environment..."
-          rm -rf hadoop-src
-          rm -rf ~/.m2/repository
-          docker system prune -af
-
-      # --- Common Docker build steps ---
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+      - name: Upload build context artifact
+        uses: actions/upload-artifact@v4
         with:
-          registry: docker.io
-          username: terrestrials
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          name: build-context
+          path: images/hadoop
 
-      - name: Generate timestamp
-        id: timestamp
-        run: echo "timestamp=$(date -u +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
-
-      - name: Extract metadata for Hadoop
-        id: meta-hadoop
-        uses: docker/metadata-action@v5
-        with:
-          images: terrestrials/hadoop
-          tags: |
-            type=raw,value=${{ env.HADOOP_VERSION }}-${{ steps.timestamp.outputs.timestamp }},enable={{is_default_branch}}
-            type=raw,value=${{ env.HADOOP_VERSION }},enable={{is_default_branch}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Hadoop image
-        uses: docker/build-push-action@v5
-        with:
-          context: images/hadoop
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-hadoop.outputs.tags }}
-          labels: ${{ steps.meta-hadoop.outputs.labels }}
-          build-args: |
-            HADOOP_TARBALL=hadoop-release.tar.gz
-            OZONE_TAG=latest
-          platforms: linux/amd64,linux/arm64
-
-      - name: Send notification to Telegram
-        if: always()
-        run: |
-          if [ ${{ job.status }} == 'success' ]; then
-            STATUS_ICON="✅"
-            STATUS_TEXT="Success"
-          else
-            STATUS_ICON="❌"
-            STATUS_TEXT="Failure"
-          fi
-          COMMIT_HASH=$(echo "${{ github.sha }}" | cut -c1-7)
-          REPO_NAME=$(echo "${{ github.repository }}" | sed 's/[._-]/\\&/g')
-          WORKFLOW_NAME=$(echo "${{ github.workflow }}" | sed 's/[._-]/\\&/g')
-          COMMIT_MESSAGE=$(echo "${{ github.event.head_commit.message }}" | sed 's/[._-]/\\&/g' | tr -d '\n\r')
-          MESSAGE="*${STATUS_ICON} ${WORKFLOW_NAME}: ${STATUS_TEXT}*
-          
-          *Repository*: \`${REPO_NAME}\`
-          *Commit*: \`${COMMIT_HASH}\` \- _${COMMIT_MESSAGE}_
-          
-          [View Workflow Run on GitHub](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d "text=${MESSAGE}" \
-          -d "parse_mode=MarkdownV2"
+  build:
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/reusable-docker-build.yml
+    with:
+      workflow_name: 'Build Hadoop Docker Image'
+      image_name: 'terrestrials/hadoop'
+      image_context: 'images/hadoop'
+      image_version: ${{ needs.prepare.outputs.hadoop_version }}
+      build_args: |
+        HADOOP_TARBALL=hadoop-release.tar.gz
+        OZONE_TAG=latest
+    secrets: inherit
