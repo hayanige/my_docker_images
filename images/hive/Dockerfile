@@ -4,10 +4,7 @@ FROM terrestrials/hadoop:${HADOOP_TAG}
 
 USER root
 
-# Swap Java from version 11 to 8, as Hive 3.1 requires Java 8.
-# First, remove Java 11, then install Java 8.
-RUN dnf remove -y java-11-openjdk java-11-openjdk-devel java-11-openjdk-headless && \
-    dnf install -y --setopt=tsflags=nodocs \
+RUN dnf install -y --setopt=tsflags=nodocs \
       java-1.8.0-openjdk \
       java-1.8.0-openjdk-devel \
     && dnf clean all \
