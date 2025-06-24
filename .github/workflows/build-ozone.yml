@@ -19,12 +19,12 @@ on:
       ozone_ref:
         description: 'Ozone repository ref (branch/tag/commit)'
         required: false
-        default: 'release-1.4.0' # Ozone 1.4.0 is compatible with Hadoop 3
+        default: 'ozone-2.0.0'
         type: string
 
 env:
   # workflow_dispatch の入力、またはデフォルト値を設定
-  OZONE_REF: ${{ github.event.inputs.ozone_ref || 'release-1.4.0' }}
+  OZONE_REF: ${{ github.event.inputs.ozone_ref || 'ozone-2.0.0' }}
 
 jobs:
   prepare:
@@ -39,7 +39,7 @@ jobs:
       - name: Extract Ozone version from ref
         id: version
         run: |
-          # 'release-1.4.0' -> '1.4.0' のようにバージョン番号を抽出
+          # 'ozone-2.0.0' -> '2.0.0' のようにバージョン番号を抽出
           VERSION=$(echo "${{ env.OZONE_REF }}" | grep -o -E '[0-9]+\.[0-9]+\.[0-9]+')
           echo "OZONE_VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
