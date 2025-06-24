@@ -1,12 +1,14 @@
-# Multi-stage build to extract only necessary Ozone JARs
+# Stage 1: Extract necessary Ozone JARs from a pre-built Ozone image.
+# This creates a dependency: a terrestrials/ozone image with the specified tag
+# must exist in the registry before building this Hadoop image.
 ARG OZONE_TAG=latest
 FROM terrestrials/ozone:${OZONE_TAG} AS ozone-jars
 
 # Stage 2: Build Hadoop image using the common base
 FROM terrestrials/base:latest
 
-# Copy and extract Hadoop tarball
-ARG HADOOP_TARBALL=hadoop-*.tar.gz
+# Copy and extract Hadoop tarball provided as a build argument
+ARG HADOOP_TARBALL
 COPY ${HADOOP_TARBALL} /tmp/
 
 RUN tar -xzf /tmp/${HADOOP_TARBALL} -C /opt/ && \
@@ -35,5 +37,7 @@ ENV HADOOP_LOG_DIR=/var/log/hadoop
 ENV TZ=Asia/Tokyo
 
 # Copy only necessary Ozone JARs from the first stage
+# This JAR allows Hadoop clients to connect to an Ozone filesystem (o3fs).
 COPY --from=ozone-jars /opt/ozone/share/ozone/lib/ozone-filesystem-hadoop3-*.jar /opt/hadoop/share/hadoop/common/lib/
+# The client JAR is not needed as the full filesystem JAR is already included.
 RUN find /opt/hadoop/share/hadoop/common/lib -name "ozone-filesystem-hadoop3-client-*.jar" -exec rm {} \;

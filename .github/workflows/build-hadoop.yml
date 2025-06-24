@@ -36,13 +36,17 @@ on:
         type: string
 
 env:
+  # workflow_dispatch の入力、またはデフォルト値を設定
   HADOOP_VERSION: ${{ github.event.inputs.hadoop_version || '3.4.1' }}
+  HADOOP_REF: ${{ github.event.inputs.hadoop_ref || 'rel/release-3.4.1' }}
 
 jobs:
   prepare:
+    # ソースビルド時はARMランナー、それ以外は標準ランナーを使用
     runs-on: ${{ (github.event.inputs.build_method == 'source' && 'ubuntu-22.04-arm') || 'ubuntu-latest' }}
     outputs:
       hadoop_version: ${{ env.HADOOP_VERSION }}
+      hadoop_tarball_name: ${{ steps.tarball_info.outputs.name }}
     steps:
       - name: Checkout Dockerfile repository
         uses: actions/checkout@v4
@@ -52,8 +56,8 @@ jobs:
         if: github.event.inputs.build_method == 'download' || github.event_name != 'workflow_dispatch'
         run: |
           echo "Downloading Hadoop version ${{ env.HADOOP_VERSION }}..."
-          curl -fsSL "https://dlcdn.apache.org/hadoop/common/hadoop-${{ env.HADOOP_VERSION }}/hadoop-${{ env.HADOOP_VERSION }}.tar.gz" -o images/hadoop/hadoop-${{ env.HADOOP_VERSION }}.tar.gz
-          mv images/hadoop/hadoop-${{ env.HADOOP_VERSION }}.tar.gz images/hadoop/hadoop-release.tar.gz
+          # より永続的なアーカイブURLを使用
+          curl -fsSL "https://archive.apache.org/dist/hadoop/common/hadoop-${{ env.HADOOP_VERSION }}/hadoop-${{ env.HADOOP_VERSION }}.tar.gz" -o images/hadoop/hadoop-release.tar.gz
           echo "Download complete."
 
       # --- Slow path: Build from source ---
@@ -62,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: apache/hadoop
-          ref: ${{ github.event.inputs.hadoop_ref || 'rel/release-3.4.1' }}
+          ref: ${{ env.HADOOP_REF }}
           path: hadoop-src
 
       - name: Set up JDK 11
@@ -77,9 +81,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-hadoop-${{ github.event.inputs.hadoop_ref || 'rel/release-3.4.1' }}-${{ hashFiles('hadoop-src/**/pom.xml') }}
+          # GITHUB_REF_NAME を使うことで、どのイベントでも安定したキーを生成
+          key: ${{ runner.os }}-maven-hadoop-${{ env.HADOOP_REF }}-${{ hashFiles('hadoop-src/**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-maven-hadoop-${{ github.event.inputs.hadoop_ref || 'rel/release-3.4.1' }}-
+            ${{ runner.os }}-maven-hadoop-${{ env.HADOOP_REF }}-
 
       - name: Build Hadoop from source
         if: github.event.inputs.build_method == 'source'
@@ -90,6 +95,10 @@ jobs:
         if: github.event.inputs.build_method == 'source'
         run: |
           find hadoop-src/hadoop-dist/target -name "hadoop-*.tar.gz" -exec mv {} images/hadoop/hadoop-release.tar.gz \;
+
+      - name: Get tarball filename
+        id: tarball_info
+        run: echo "name=hadoop-release.tar.gz" >> $GITHUB_OUTPUT
 
       - name: Upload build context artifact
         uses: actions/upload-artifact@v4
@@ -109,6 +118,6 @@ jobs:
       image_context: 'images/hadoop'
       image_version: ${{ needs.prepare.outputs.hadoop_version }}
       build_args: |
-        HADOOP_TARBALL=hadoop-release.tar.gz
+        HADOOP_TARBALL=${{ needs.prepare.outputs.hadoop_tarball_name }}
         OZONE_TAG=latest
     secrets: inherit

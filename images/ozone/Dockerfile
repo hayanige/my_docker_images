@@ -22,8 +22,8 @@ ENV JAVA_HOME=/usr/lib/jvm/java-11 \
     OZONE_LOG_DIR=/var/log/ozone \
     TZ=Asia/Tokyo
 
-# Copy and extract Ozone tarball
-ARG OZONE_TARBALL=ozone-*.tar.gz
+# Copy and extract Ozone tarball provided as a build argument
+ARG OZONE_TARBALL
 COPY ${OZONE_TARBALL} /tmp/
 
 RUN tar -xzf /tmp/${OZONE_TARBALL} -C /opt/ && \

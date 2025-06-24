@@ -2,7 +2,7 @@
 
 FROM rockylinux/rockylinux:9.5
 
-# Install common dependencies for Hadoop and Ozone
+# Install common dependencies for Hadoop and Ozone in a single layer
 RUN dnf install -y epel-release && \
     dnf install -y \
       dumb-init \

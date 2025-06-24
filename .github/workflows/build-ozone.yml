@@ -19,26 +19,35 @@ on:
       ozone_ref:
         description: 'Ozone repository ref (branch/tag/commit)'
         required: false
-        default: 'ozone-2.0.0'
+        default: 'release-1.4.0' # Ozone 1.4.0 is compatible with Hadoop 3
         type: string
 
 env:
-  OZONE_VERSION: '2.0.0'
+  # workflow_dispatch の入力、またはデフォルト値を設定
+  OZONE_REF: ${{ github.event.inputs.ozone_ref || 'release-1.4.0' }}
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      ozone_version: ${{ env.OZONE_VERSION }}
+      ozone_version: ${{ steps.version.outputs.OZONE_VERSION }}
+      ozone_tarball_name: ${{ steps.tarball_info.outputs.name }}
     steps:
       - name: Checkout Dockerfile repository
         uses: actions/checkout@v4
+
+      - name: Extract Ozone version from ref
+        id: version
+        run: |
+          # 'release-1.4.0' -> '1.4.0' のようにバージョン番号を抽出
+          VERSION=$(echo "${{ env.OZONE_REF }}" | grep -o -E '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "OZONE_VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Checkout Apache Ozone repository
         uses: actions/checkout@v4
         with:
           repository: apache/ozone
-          ref: ${{ github.event.inputs.ozone_ref || 'ozone-2.0.0' }}
+          ref: ${{ env.OZONE_REF }}
           path: ozone-src
 
       - name: Install protoc compiler
@@ -56,9 +65,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-ozone-${{ github.event.inputs.ozone_ref || 'ozone-2.0.0' }}-${{ hashFiles('ozone-src/**/pom.xml') }}
+          key: ${{ runner.os }}-maven-ozone-${{ env.OZONE_REF }}-${{ hashFiles('ozone-src/**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-maven-ozone-${{ github.event.inputs.ozone_ref || 'ozone-2.0.0' }}-
+            ${{ runner.os }}-maven-ozone-${{ env.OZONE_REF }}-
 
       - name: Build Ozone from source
         working-directory: ozone-src
@@ -66,7 +75,12 @@ jobs:
           mvn clean package -DskipTests -Pdist -Dmaven.javadoc.skip=true -B
 
       - name: Move tarball to Docker build context
-        run: find ozone-src/hadoop-ozone/dist/target -name "ozone-*.tar.gz" -exec mv {} images/ozone/ \;
+        id: tarball_info
+        run: |
+          TARBALL_PATH=$(find ozone-src/hadoop-ozone/dist/target -name "ozone-*.tar.gz")
+          TARBALL_NAME=$(basename ${TARBALL_PATH})
+          mv ${TARBALL_PATH} images/ozone/
+          echo "name=${TARBALL_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload build context artifact
         uses: actions/upload-artifact@v4
@@ -85,5 +99,5 @@ jobs:
       image_name: 'terrestrials/ozone'
       image_context: 'images/ozone'
       image_version: ${{ needs.prepare.outputs.ozone_version }}
-      build_args: 'OZONE_TARBALL=ozone-*.tar.gz'
+      build_args: OZONE_TARBALL=${{ needs.prepare.outputs.ozone_tarball_name }}
     secrets: inherit
