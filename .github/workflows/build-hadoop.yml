@@ -56,8 +56,7 @@ jobs:
         if: github.event.inputs.build_method == 'download' || github.event_name != 'workflow_dispatch'
         run: |
           echo "Downloading Hadoop version ${{ env.HADOOP_VERSION }}..."
-          # より永続的なアーカイブURLを使用
-          curl -fsSL "https://archive.apache.org/dist/hadoop/common/hadoop-${{ env.HADOOP_VERSION }}/hadoop-${{ env.HADOOP_VERSION }}.tar.gz" -o images/hadoop/hadoop-release.tar.gz
+          curl -fsSL "https://dlcdn.apache.org/hadoop/common/hadoop-${{ env.HADOOP_VERSION }}/hadoop-${{ env.HADOOP_VERSION }}.tar.gz" -o images/hadoop/hadoop-release.tar.gz
           echo "Download complete."
 
       # --- Slow path: Build from source ---
