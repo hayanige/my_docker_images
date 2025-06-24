@@ -10,9 +10,6 @@ RUN dnf install -y --setopt=tsflags=nodocs \
     && dnf clean all \
     && rm -rf /var/cache/dnf
 
-# Set JAVA_HOME to the newly installed Java 8
-ENV JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
-
 # Build arguments for the tarball names, provided by the workflow
 ARG HIVE_TARBALL
 ARG TEZ_TARBALL
@@ -30,11 +27,12 @@ RUN tar -xzf /tmp/${TEZ_TARBALL} -C /opt/ && \
     rm /tmp/${TEZ_TARBALL}
 
 # Set Hive and Tez environment variables.
-# The PATH is explicitly redefined to ensure it uses the new JAVA_HOME.
-ENV PATH=${JAVA_HOME}/bin:/opt/hadoop/bin:/opt/hive/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENV TEZ_CONF_DIR=/opt/tez/conf \
+ENV JAVA_HOME=/usr/lib/jvm/java-1.8.0 \
+    TEZ_CONF_DIR=/opt/tez/conf \
     TEZ_JARS=/opt/tez \
-    HADOOP_CLASSPATH=${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*
+    PATH=/opt/hive/bin:${PATH}
+
+ENV HADOOP_CLASSPATH=${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*
 
 # Create hive user and group
 RUN groupadd --gid 1005 hive && useradd hive --system --shell /sbin/nologin --uid 1005 --gid hive --groups hadoop && \
